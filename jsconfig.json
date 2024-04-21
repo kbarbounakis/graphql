@@ -1,7 +1,11 @@
 {
-    "compilerOptions": {
-        "experimentalDecorators": true,
-        "paths": {
-        }
+  "compilerOptions": {
+    "baseUrl": ".",
+    "experimentalDecorators": true,
+    "paths": {
+      "@themost/graphql": [
+        "src/index"
+      ]
     }
+  }
 }
