@@ -1,7 +1,0 @@
-class Service {
-
-}
-
-export {
-    Service
-}
