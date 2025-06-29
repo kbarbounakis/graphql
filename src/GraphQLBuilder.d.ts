@@ -3,5 +3,6 @@ import { GraphQLObjectType } from 'graphql';
 
 export declare class GraphQLBuilder extends ApplicationService {
     constructor(app: ApplicationBase);
-    getModelType(model: string): Promise<GraphQLObjectType>;
+    getObjectType(name: string): Promise<GraphQLObjectType>;
+    getObjectTypes(): Promise<GraphQLObjectType[]>;
 }

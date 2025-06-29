@@ -1,6 +1,6 @@
-import { ApplicationService } from '@themost/common';
-import { ODataModelBuilder, ODataConventionModelBuilder, EdmType } from '@themost/data';
-import { GraphQLBoolean, GraphQLInt, GraphQLString, GraphQLFloat, GraphQLObjectType} from 'graphql';
+import {ApplicationService} from '@themost/common';
+import {EdmType, ODataConventionModelBuilder, ODataModelBuilder} from '@themost/data';
+import {GraphQLBoolean, GraphQLFloat, GraphQLInt, GraphQLObjectType, GraphQLString} from 'graphql';
 
 const EdmTypeGraphQLType = [
     [ EdmType.EdmBoolean, GraphQLBoolean ],
@@ -33,16 +33,27 @@ class GraphQLBuilder extends ApplicationService {
         this.builder = app.getConfiguration().getStrategy(ODataModelBuilder);
         if (this.builder == null) {
             this.builder = new ODataConventionModelBuilder(app.getConfiguration());
-            this.builder.read
         }
     }
 
     /**
-     * @param {string} model 
+     * @param {string} name
      */
-    async getModelType(model) {
+    async getObjectType(name) {
         await this.builder.getEdm();
-        const entityType = this.builder.getEntity(model);
+        const entityType = this.builder.getEntity(name);
+        if (entityType == null) {
+            throw new Error(`Entity type '${name}' not found`);
+        }
+        return this.entityTypeToGraphQLTypeConfig(entityType);
+    }
+
+    /**
+     *
+     * @param {import('@themost/data').EntityTypeConfiguration} entityType
+     * @returns {import('graphql').GraphQLObjectTypeConfig}
+     */
+    entityTypeToGraphQLTypeConfig(entityType) {
         const { name, property } = entityType;
         const fields = property.map((prop) => {
             let mapType = EdmTypeGraphQLType.find(([type]) => type === prop.type);
@@ -55,12 +66,41 @@ class GraphQLBuilder extends ApplicationService {
                     type
                 }
             }
-        })
-        const objectType = new GraphQLObjectType({
+        }).reduce((acc, curr) => {
+            return Object.assign(acc, curr);
+        }, {});
+        return {
             name,
             fields
-          })
-        return objectType;
+        };
+    }
+
+    /**
+     * @returns {Promise<Array<GraphQLObjectType>>}
+     */
+    async getObjectTypes() {
+        /**
+         *
+         * @type {Array<import('graphql').GraphQLObjectTypeConfig>}
+         */
+        const objectTypeConfigs = [];
+        // get schema
+        const schema = await this.builder.getEdm();
+        for (const entitySet of schema.entityContainer.entitySet) {
+            // get model type
+            const objectTypeConfig = this.entityTypeToGraphQLTypeConfig(entitySet.entityType);
+            let baseTypeDescriptor = Object.getOwnPropertyDescriptor(entitySet.entityType, 'baseType');
+            while (baseTypeDescriptor) {
+                const baseEntityType = this.builder.getEntity(baseTypeDescriptor.value)
+                const baseObjectTypeConfig = this.entityTypeToGraphQLTypeConfig(baseEntityType);
+                objectTypeConfig.fields = Object.assign({}, baseObjectTypeConfig.fields, objectTypeConfig.fields);
+                baseTypeDescriptor = Object.getOwnPropertyDescriptor(baseEntityType, 'baseType');
+            }
+            objectTypeConfigs.push(objectTypeConfig);
+        }
+        return objectTypeConfigs.map((config) => {
+            return new GraphQLObjectType(config);
+        });
     }
 
 }
