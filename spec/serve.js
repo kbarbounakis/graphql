@@ -5,7 +5,6 @@ import { createHandler } from 'graphql-http/lib/use/express';
 import { GraphQLSchema, GraphQLObjectType, GraphQLList } from 'graphql';
 import { ruruHTML } from 'ruru/server';
 import camelCase from 'lodash/camelCase';
-import pluralize from 'pluralize';
 
 (async function main() {
     /**
@@ -27,13 +26,33 @@ import pluralize from 'pluralize';
         const service = app.getService(GraphQLBuilder);
             service.getObjectTypes().then((objectTypes) => {
                 const fields = objectTypes.reduce((previousValue, currentValue) => {
-                    const name = camelCase(pluralize(currentValue.name));
+                    /**
+                     * @type {import('@themost/graphql').GraphQLObjectTypeExtensions}
+                     */
+                    const extensions = currentValue.extensions;
+                    const entitySet = extensions['@themost.entitySet'];
+                    const name = camelCase(entitySet);
                     return Object.assign(previousValue, {
                         [name]: {
                             type: new GraphQLList(currentValue),
-                            // eslint-disable-next-line no-unused-vars
+                            /**
+                             * @param source
+                             * @param args
+                             * @param {import('@themost/express').ExpressDataContext} context
+                             * @param info
+                             * @returns {Promise<Array<*>>}
+                             */
                             resolve: (source, args, context, info) => {
-                                return [];
+                                const { returnType } = info;
+                                if (returnType instanceof GraphQLList) {
+                                    const { ofType } = returnType;
+                                    const entityType = service.getEntityType(ofType);
+                                    const requestedFields = info.fieldNodes[0].selectionSet.selections.map(
+                                        field => field.name.value
+                                    );
+                                    return context.model(entityType).asQueryable().getItems();
+                                }
+                                throw new Error('Expected a list type');
                             }
                         }
                     });
@@ -52,6 +71,11 @@ import pluralize from 'pluralize';
                 '/graphql',
                 createHandler({
                     schema,
+                    // eslint-disable-next-line no-unused-vars
+                    context: (req, _res) => {
+                        // noinspection JSUnresolvedReference
+                        return req.raw.context;
+                    }
                 }),
             );
             serviceRouter.get('/graphql-explorer', (_req, res) => {

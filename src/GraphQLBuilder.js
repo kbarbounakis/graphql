@@ -21,6 +21,18 @@ const EdmTypeGraphQLType = [
     [ EdmType.EdmStream, GraphQLString ],
 ]
 
+const GraphQLBuilderExtensions = {
+    '@themost.entityType': {
+        type: GraphQLString,
+        description: 'The name of the entity type'
+    },
+    '@themost.entitySet': {
+        type: GraphQLString,
+        description: 'The name of the entity set'
+    }
+
+}
+
 class GraphQLBuilder extends ApplicationService {
 
     /**
@@ -69,10 +81,38 @@ class GraphQLBuilder extends ApplicationService {
         }).reduce((acc, curr) => {
             return Object.assign(acc, curr);
         }, {});
+        const extensions = {
+            '@themost.entityType': name
+        }
         return {
             name,
-            fields
+            fields,
+            extensions
         };
+    }
+
+    /**
+     *
+     * @param {import('graphql').GraphQLObjectType} objectType
+     * @returns {string}
+     */
+    getEntityType(objectType) {
+        if (objectType.extensions && objectType.extensions['@themost.entityType']) {
+            return objectType.extensions['@themost.entityType'];
+        }
+        throw new Error('Entity type not found in object type extensions');
+    }
+
+    /**
+     *
+     * @param {import('graphql').GraphQLObjectType} objectType
+     * @returns {string}
+     */
+    getEntitySet(objectType) {
+        if (objectType.extensions && objectType.extensions['@themost.entitySet']) {
+            return objectType.extensions['@themost.entitySet'];
+        }
+        throw new Error('Entity set not found in object type extensions');
     }
 
     /**
@@ -96,6 +136,9 @@ class GraphQLBuilder extends ApplicationService {
                 objectTypeConfig.fields = Object.assign({}, baseObjectTypeConfig.fields, objectTypeConfig.fields);
                 baseTypeDescriptor = Object.getOwnPropertyDescriptor(baseEntityType, 'baseType');
             }
+            Object.assign(objectTypeConfig.extensions, {
+                '@themost.entitySet': entitySet.name
+            });
             objectTypeConfigs.push(objectTypeConfig);
         }
         return objectTypeConfigs.map((config) => {
@@ -106,5 +149,6 @@ class GraphQLBuilder extends ApplicationService {
 }
 
 export {
+    GraphQLBuilderExtensions,
     GraphQLBuilder
 }
